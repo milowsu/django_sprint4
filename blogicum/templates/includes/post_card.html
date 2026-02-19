@@ -1,0 +1,21 @@
+<div class="card" style="width: 40rem;">
+  {% if post.image %}
+    <img src="{{ post.image.url }}" class="card-img-top" alt="{{ post.title }}">
+  {% endif %}
+  <div class="card-body">
+    <h5 class="card-title">{{ post.title }}</h5>
+    <h6 class="card-subtitle mb-2 text-muted">
+      <small>
+        {{ post.pub_date|date:"Y m/d" }}
+        От автора @{{ post.author.username }} в категории {% include "includes/category_link.html" %}
+      </small>
+    </h6>
+    <p class="card-text">{{ post.text|truncatewords:10 }}</p>
+    <a href="{% url 'post_detail' post.id %}" class="card-link">Читать полный текст</a>
+    
+    <!-- Счетчик комментариев -->
+    <span class="card-link">
+      Комментариев: {{ post.comments.count }}
+    </span>
+  </div>
+</div>

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Вход на сайт</h1>
+  {% if form.errors %}
+    <p style="color: red">Имя пользователя или пароль неверны. Попробуйте снова.</p>
+  {% endif %}
+  
+  <form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Войти</button>
+  </form>
+  
+  <p><a href="{% url 'registration' %}">Зарегистрироваться</a></p>
+{% endblock %}
