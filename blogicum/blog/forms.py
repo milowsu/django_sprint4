@@ -7,7 +7,7 @@ from django.contrib.auth.forms import UserChangeForm
 class PostForm(forms.ModelForm):
     class Meta:
         model = Post
-        fields = ['title', 'text', 'category', 'image', 'pub_date']
+        fields = ['title', 'text', 'category', 'image', 'pub_date', 'is_published']
         widgets = {
             'pub_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
         }
@@ -17,9 +17,11 @@ class PostForm(forms.ModelForm):
             'category': 'Категория',
             'image': 'Изображение',
             'pub_date': 'Дата публикации',
+            'is_published': 'Опубликовано',
         }
         help_texts = {
             'pub_date': 'Если указать дату в будущем - пост будет отложен',
+            'is_published': 'Снимите галочку, чтобы скрыть пост',
         }
 
 class CommentForm(forms.ModelForm):

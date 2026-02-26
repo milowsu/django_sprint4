@@ -3,22 +3,20 @@ from django.utils import timezone
 from django.views.generic import CreateView, TemplateView
 from django.contrib.auth.forms import UserCreationForm
 from django.urls import reverse_lazy
-from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.http import Http404
-
 from .models import Post, Category, Comment
 from .forms import PostForm, CommentForm, ProfileEditForm
+from .utils import paginate_queryset, filter_posts_by_visibility
+
 
 def index(request):
-    post_list = Post.objects.filter(
-        pub_date__lte=timezone.now(),
-        is_published=True
-    )
-    paginator = Paginator(post_list, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # Получаем все посты и применяем фильтр видимости
+    posts = Post.objects.all()
+    visible_posts = filter_posts_by_visibility(posts, request.user)
+    
+    page_obj = paginate_queryset(request, visible_posts)
     
     context = {
         'page_obj': page_obj,
@@ -29,56 +27,70 @@ def index(request):
 def post_detail(request, post_id):
     post = get_object_or_404(Post, id=post_id)
     
-    if not post.is_published and post.author != request.user:
+    # Проверяем, может ли пользователь видеть этот пост
+    if post.author == request.user:
+        # Автор видит всё
+        pass
+    elif not (post.is_published and post.pub_date <= timezone.now()):
+        # Остальные видят только опубликованные
         raise Http404("Пост не найден")
     
-    comment_form = CommentForm()  # Добавь форму в контекст
+    comment_form = CommentForm()
     
     context = {
         'post': post,
-        'comment_form': comment_form,  # Добавь это
+        'comment_form': comment_form,
     }
     return render(request, 'post_detail.html', context)
 
 
 def category_posts(request, category_slug):
     category = get_object_or_404(Category, slug=category_slug)
-    post_list = Post.objects.filter(category=category)
-    paginator = Paginator(post_list, 10)
     
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # Получаем посты категории и применяем фильтр
+    category_posts = Post.objects.filter(category=category)
+    visible_posts = filter_posts_by_visibility(category_posts, request.user)
+    
+    page_obj = paginate_queryset(request, visible_posts)
     
     context = {
         'category': category,
         'page_obj': page_obj,
     }
     return render(request, 'category.html', context)
+
 class RegisterView(CreateView):
     form_class = UserCreationForm
     template_name = 'registration/registration_form.html'
     success_url = reverse_lazy('login')
+
+
 def about(request):
     return render(request, 'pages/about.html')
+
 
 def rules(request):
     return render(request, 'pages/rules.html')
 
+
 def profile(request, username):
-    user = get_object_or_404(User, username=username)
+    profile_user = get_object_or_404(User, username=username)
     
-    # Получаем все посты пользователя
-    post_list = Post.objects.filter(author=user)
+    # Получаем посты пользователя
+    user_posts = Post.objects.filter(author=profile_user)
     
-    paginator = Paginator(post_list, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # Применяем фильтр видимости (если смотрим чужой профиль - видим только опубликованные)
+    visible_posts = filter_posts_by_visibility(user_posts, request.user)
+    
+    page_obj = paginate_queryset(request, visible_posts)
     
     context = {
-        'profile': user,
+        'profile': profile_user,
         'page_obj': page_obj,
     }
     return render(request, 'profile.html', context)
+
+
 @login_required
 def create_post(request):
     if request.method == 'POST':
@@ -93,11 +105,12 @@ def create_post(request):
     
     context = {'form': form}
     return render(request, 'blog/create_post.html', context)
+
+
 @login_required
 def edit_post(request, post_id):
     post = get_object_or_404(Post, id=post_id)
     
-    # Проверяем, что пользователь - автор поста
     if post.author != request.user:
         return redirect('post_detail', post_id=post.id)
     
@@ -112,9 +125,10 @@ def edit_post(request, post_id):
     context = {
         'form': form,
         'post': post,
-        'is_edit': True,  # Флаг для шаблона, чтобы знать что это редактирование
+        'is_edit': True,
     }
     return render(request, 'blog/create_post.html', context)
+
 
 @login_required
 def add_comment(request, post_id):
@@ -130,11 +144,11 @@ def add_comment(request, post_id):
             return redirect('post_detail', post_id=post.id)
     return redirect('post_detail', post_id=post.id)
 
+
 @login_required
 def edit_comment(request, post_id, comment_id):
     comment = get_object_or_404(Comment, id=comment_id, post_id=post_id)
     
-    # Проверяем, что пользователь - автор комментария
     if comment.author != request.user:
         return redirect('post_detail', post_id=post_id)
     
@@ -149,15 +163,15 @@ def edit_comment(request, post_id, comment_id):
     context = {
         'form': form,
         'comment': comment,
-        'post': comment.post,  # Вот это было исправлено!
+        'post': comment.post,
     }
     return render(request, 'blog/edit_comment.html', context)
+
 
 @login_required
 def delete_post(request, post_id):
     post = get_object_or_404(Post, id=post_id)
     
-    # Проверяем, что пользователь - автор поста
     if post.author != request.user:
         return redirect('post_detail', post_id=post.id)
     
@@ -175,7 +189,6 @@ def delete_post(request, post_id):
 def delete_comment(request, post_id, comment_id):
     comment = get_object_or_404(Comment, id=comment_id, post_id=post_id)
     
-    # Проверяем, что пользователь - автор комментария
     if comment.author != request.user:
         return redirect('post_detail', post_id=post_id)
     
@@ -189,20 +202,19 @@ def delete_comment(request, post_id, comment_id):
     }
     return render(request, 'blog/delete_comment.html', context)
 
+
 class AboutView(TemplateView):
-    """Страница "О проекте" """
     template_name = 'pages/about.html'
 
 
 class RulesView(TemplateView):
-    """Страница "Наши правила" """
     template_name = 'pages/rules.html'
+
 
 @login_required
 def edit_profile(request, username):
     user = get_object_or_404(User, username=username)
     
-    # Проверяем, что пользователь редактирует свой профиль
     if user != request.user:
         return redirect('profile', username=username)
     
